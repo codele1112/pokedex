@@ -2,7 +2,7 @@ const fs = require("fs");
 const csv = require("csvtojson");
 
 const createPokemon = async () => {
-  const img = fs.readdirSync("./imgpokemon");
+  const img = fs.readdirSync("./images");
   // console.log(img);
   let newData = await csv().fromFile("pokemon.csv");
 
@@ -17,7 +17,7 @@ const createPokemon = async () => {
   newData = newData
     .map((e, index) => {
       return {
-        id: index + 1,
+        id: (index + 1).toString(),
         name: e.Name,
         types: [e.Type1, e.Type2]
           .filter(Boolean)

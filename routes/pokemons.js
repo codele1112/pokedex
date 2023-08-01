@@ -7,7 +7,6 @@ const { resolve } = require("path");
 let rootDir = path.resolve(__dirname);
 
 /* GET all data listing. */
-const { pokemons } = require("../pokemon.json");
 
 router.get("/", (req, res, next) => {
   // res.send(pokemons);
@@ -38,21 +37,21 @@ router.get("/", (req, res, next) => {
     let db = fs.readFileSync(absolutePath, "utf-8");
     db = JSON.parse(db);
     const { data } = db;
-    //Filter data by title
+
     // console.log("pokemons:", data);
     let result = [];
 
     if (filterKeys.length) {
-      // if (filterQuery.types) {
-      //   const searchQuery = filterQuery.types.toLowerCase();
-      //   console.log("searchQuery:", searchQuery);
+      if (filterQuery.types) {
+        const searchQuery = filterQuery.types.toLowerCase();
+        console.log("searchQuery type:", searchQuery);
 
-      //   result = data.filter((pokemon) => pokemon.types.includes(searchQuery));
-      // }
+        result = data.filter((pokemon) => pokemon.types.includes(searchQuery));
+      }
       if (filterQuery.search) {
         let searchQuery = filterQuery.search.toLowerCase();
         searchQuery = parseInt(searchQuery);
-        console.log("searchQueries:", typeof searchQuery);
+        console.log("searchQuery:", searchQuery);
         result = data.filter((pokemon) => {
           return (
             pokemon.name.includes(searchQuery) ||
@@ -79,7 +78,7 @@ router.get("/:id", (req, res, next) => {
     let pokemonId = req?.params?.id;
     pokemonId = parseInt(pokemonId);
 
-    console.log("pokemonId:", typeof pokemonId);
+    console.log("pokemonId:", pokemonId);
     const updates = req.body;
     const updateKeys = Object.keys(updates);
 
@@ -112,7 +111,7 @@ router.get("/:id", (req, res, next) => {
     const updatedPokemon = { ...db.data[targetIndex], ...updates };
 
     //write and save to db.json
-    fs.writeFileSync("data.json", JSON.stringify(db));
+    fs.writeFileSync("pokemon.json", JSON.stringify(db));
 
     //put send response
     res.status(200).send(updatedPokemon);
@@ -121,11 +120,162 @@ router.get("/:id", (req, res, next) => {
   }
 });
 
+/* GET a pokemon together with the previous and next pokemon information.. */
+router.get("/:id", function (req, res, next) {
+  //put input validation
+  try {
+    const pokemonId = req.params.id;
+    let db = fs.readFileSync("pokemon.json", "utf-8");
+    db = JSON.parse(db);
+    const { data } = db;
+
+    const targetIndex = data.findIndex((pokemon) => pokemonId === pokemon.id);
+
+    if (targetIndex < 0) {
+      const error = new Error("Pokemon not found");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const lastIndex = data.length - 1;
+    let previousIndex = targetIndex - 1;
+    let nextIndex = targetIndex + 1;
+
+    if (targetIndex === lastIndex) {
+      nextIndex = 0;
+    }
+    if (targetIndex === 0) {
+      previousIndex = lastIndex;
+    }
+
+    const pokemon = data[targetIndex];
+    const previousPokemon = data[previousIndex];
+    const nextPokemon = data[nextIndex];
+
+    const result = {
+      pokemon,
+      previousPokemon,
+      nextPokemon,
+    };
+
+    res.status(200).send(result);
+  } catch (error) {
+    console.log(error);
+    next(error);
+  }
+});
+
+// API for creating new Pokémon
+router.post(`/`, function (req, res, next) {
+  try {
+    const pokemonId = req.params.id;
+    const { name, types, id, url } = req.body;
+    name = name.toLowerCase();
+    types = types.forEach((item) => item.toLowerCase());
+
+    if (!name || !types) {
+      const error = new Error("Missing body info");
+      error.statusCode = 400;
+      throw error;
+    }
+    if (types.length > 2) {
+      const error = new Error("Pokémon can only have one or two types.");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const absolutePath = resolve("./pokemon.json");
+    let db = fs.readFileSync(absolutePath, "utf-8");
+
+    db = JSON.parse(db);
+    const { data } = db;
+
+    const allTypes = [];
+    data.forEach((pokemon) => allTypes.push(...pokemon.types));
+    console.log(allTypes);
+    console.log("types", types);
+    if (!types.every((element) => allTypes.includes(element))) {
+      const error = new Error("Pokemon's type is invalid.");
+      error.statusCode = 400;
+      throw error;
+    }
+    data.forEach((pokemon) => {
+      if (name === pokemon.name || id === pokemon.id) {
+        const error = new Error("The Pokemon already exists.");
+        error.statusCode = 400;
+        throw error;
+      }
+    });
+
+    const newPokemon = {
+      name,
+      types,
+      id: id || (data.length + 1).toString(),
+      url: url,
+    };
+
+    db.data.push(newPokemon);
+
+    fs.writeFileSync(absolutePath, JSON.stringify(db));
+
+    res.status(200).send(newPokemon);
+  } catch (error) {
+    res.status(200).send({ ...error, rootDir });
+  }
+});
+
+//  API for updating a Pokémon
+router.put("/:id", function (req, res, next) {
+  try {
+    const allowUpdate = ["name", "Type"];
+
+    const pokemonId = req.params.id;
+    const updates = req.body;
+    const updateKeys = Object.keys(updates);
+
+    //find update request that not allow
+    const notAllow = updateKeys.filter((el) => !allowUpdate.includes(el));
+
+    if (notAllow.length) {
+      const error = new Error(`Update field not allow`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    //put processing
+    //Read data from db.json then parse to JSobject
+    let db = fs.readFileSync("pokemon.json", "utf-8");
+    db = JSON.parse(db);
+    const data = db.data;
+
+    //find pokemon by id
+    const targetIndex = data.findIndex((pokemon) => pokemon.id === pokemonId);
+
+    if (targetIndex < 0) {
+      const error = new Error(`Pokemon not found`);
+      error.statusCode = 404;
+      throw error;
+    }
+
+    //Update new content to db pokemon JS object
+    const updatedPokemon = { ...db.data[targetIndex], ...updates };
+
+    //write and save to db.json
+    fs.writeFileSync("pokemon.json", JSON.stringify(db));
+
+    //put send response
+    res.status(200).send(updatedPokemon);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// API for deleting a Pokémon by Id
 router.delete("/:id", (req, res, next) => {
   try {
     const pokemonId = req.params.id;
 
-    let db = fs.readFileSync("data.json", "utf-8");
+    let db = fs.readFileSync("pokemon.json", "utf-8");
     db = JSON.parse(db);
 
     const targetIndex = db.data.findIndex(
@@ -142,7 +292,7 @@ router.delete("/:id", (req, res, next) => {
 
     db.data = db.data.filter((pokemon) => pokemon.id !== pokemonId);
 
-    fs.writeFileSync("data.json", JSON.stringify(db));
+    fs.writeFileSync("pokemon.json", JSON.stringify(db));
 
     res.status(200).send({});
   } catch (error) {

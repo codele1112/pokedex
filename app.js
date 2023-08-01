@@ -8,6 +8,8 @@ var logger = require("morgan");
 var indexRouter = require("./routes/index");
 // var pokemonRouter = require("./routes/pokemons");
 
+require("dotenv").config();
+const cors = require("cors");
 var app = express();
 
 app.use(logger("dev"));
@@ -15,9 +17,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
+app.use(cors());
 
 app.use("/", indexRouter);
-// app.use("/pokemons", pokemonRouter);
 app.use((req, res, next) => {
   const err = new Error("Not Found");
   err.statusCode = 404;
